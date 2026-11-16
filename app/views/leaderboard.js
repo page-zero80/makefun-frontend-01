@@ -39,6 +39,16 @@ function phaseState(phase) {
     return { key: 'sealed', label: 'Sealed', full: 'Standings publish when the phase is finalized' };
   }
   if (phase?.finalized_at) return { key: 'resolved', label: 'Final', full: 'Finalized standings' };
+  const name = String(phase?.key || phase?.title || '').toLowerCase();
+  if (name.includes('develop')) {
+    return { key: 'dev', label: 'Development', full: 'Development standings, judged as entries arrive' };
+  }
+  if (name.includes('final')) {
+    return { key: 'final', label: 'Final', full: 'Final standings' };
+  }
+  if (name.includes('race') || name.includes('running') || name.includes('reveal')) {
+    return { key: 'live', label: 'Live', full: 'Standings update as entries are judged' };
+  }
   return { key: 'live', label: 'Live', full: 'Standings update as entries are judged' };
 }
 

@@ -121,7 +121,7 @@ export function createBountyView(bounty) {
           )
         : fact('Deadline', 'Closed', deadlineShort(bounty.deadline));
 
-  const feeSub = fee == null ? 'no fee' : `${num(bounty.entryFeePayers || 0)} ${plural(bounty.entryFeePayers || 0, 'payer', 'payers')}`;
+  const feeSub = fee == null ? 'no fee' : plural(bounty.entryFeePayers || 0, 'payer', 'payers');
 
   const head = el(
     'header',
