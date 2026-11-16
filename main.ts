@@ -1,35 +1,104 @@
-// A working makefun-frontend-01 entry (Node 22, standard library only): the frontend is this directory's app/
-// folder, plain static files a browser opens at app/index.html (ES modules, CSS, no build step), reading make.fun's
-// public API at https://make.fun/api. The program hands it in: it copies app/ and screenshots/ from beside this file
-// to /output and writes /output/dossier.json, the summary the judge reads (your screenshots, the first load's files
-// and bytes, and your source), with the vendored make.fun library. Leave vendor/makefun-frontend.ts as it is: the
-// scorer requires dossier.json to be byte for byte what its own copy writes.
+// Package this entry for make.fun's judge.
 //
-// A starting point, not a winner: a plain board of open bounties and a page for each. Build your frontend in app/
-// (a leaderboard, profiles, speed, ease of use), put 3 PNG or JPEG screenshots of it running on live data in
-// screenshots/ (the first by name is the cover; shots.json says which views this starter's were taken of), and run it.
+// The frontend lives in app/ as plain static files (ES modules and CSS, no build
+// step) talking to make.fun's public API. This script checks that app/ and the
+// screenshots/ captured from it fit the scorer's limits, copies both beside the
+// output directory's own dossier.json, and writes that dossier with the vendored
+// builder, so the judge can see the screenshots, the first load's file and byte
+// counts, and the source. Leave vendor/makefun-frontend.ts untouched: the scorer
+// compares dossier.json against the bytes its own copy of that file produces.
 //
-// Serve it locally with `node serve.ts`, then open http://localhost:8080.
-// Outside the grader's container, MAKEFUN_OUTPUT_DIR stands in for /output:
-//   mkdir -p out && MAKEFUN_OUTPUT_DIR=out node main.ts
+// Serve the frontend locally with `node serve.ts` (http://localhost:8080).
+// Without the scorer's container, MAKEFUN_OUTPUT_DIR points the output elsewhere:
+//   MAKEFUN_OUTPUT_DIR=out node main.ts
 
-import { cpSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, lstatSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { buildDossier } from './vendor/makefun-frontend.ts';
 
+// The scorer's caps. The screenshot caps and app_max_bytes refuse an entry the
+// scorer would refuse; text_max_bytes is the amount of source the dossier keeps.
+const LIMITS = {
+  textMaxBytes: 163840,
+  screenshotMax: 3,
+  screenshotMaxBytes: 262144,
+  appMaxFiles: 993,
+  appMaxBytes: 16777216,
+} as const;
+
+/**
+ * Walk a directory and count every entry in it (files and directories alike,
+ * matching how the platform counts app/), summing the bytes of its files.
+ */
+function countEntries(dir: string): { files: number; bytes: number } {
+  let files = 0;
+  let bytes = 0;
+  const pending = [dir];
+  while (pending.length > 0) {
+    const current = pending.pop()!;
+    for (const entry of readdirSync(current, { withFileTypes: true })) {
+      const path = join(current, entry.name);
+      const stats = lstatSync(path);
+      files++;
+      if (stats.isDirectory()) pending.push(path);
+      else if (stats.isFile()) bytes += stats.size;
+    }
+  }
+  return { files, bytes };
+}
+
+/** The first file under dir that is larger than maxBytes, if any. */
+function oversizedFile(dir: string, maxBytes: number): { path: string; bytes: number } | undefined {
+  const pending = [dir];
+  while (pending.length > 0) {
+    const current = pending.pop()!;
+    for (const entry of readdirSync(current, { withFileTypes: true })) {
+      const path = join(current, entry.name);
+      const stats = lstatSync(path);
+      if (stats.isDirectory()) pending.push(path);
+      else if (stats.isFile() && stats.size > maxBytes) return { path, bytes: stats.size };
+    }
+  }
+  return undefined;
+}
+
 const here = fileURLToPath(new URL('.', import.meta.url));
+const appDir = join(here, 'app');
+const shotsDir = join(here, 'screenshots');
+
+// Refuse locally what the scorer would refuse, before copying anything.
+const appTotals = countEntries(appDir);
+if (appTotals.files > LIMITS.appMaxFiles) {
+  throw new Error(`app/: ${appTotals.files} files and directories, over the ${LIMITS.appMaxFiles} allowed (app_max_files)`);
+}
+if (appTotals.bytes > LIMITS.appMaxBytes) {
+  throw new Error(`app/: files come to ${appTotals.bytes} bytes, over the ${LIMITS.appMaxBytes} allowed (app_max_bytes)`);
+}
+if (existsSync(shotsDir)) {
+  const shotTotals = countEntries(shotsDir);
+  if (shotTotals.files > LIMITS.screenshotMax) {
+    throw new Error(`screenshots/: ${shotTotals.files} entries, over the ${LIMITS.screenshotMax} allowed (screenshots.max)`);
+  }
+  const oversized = oversizedFile(shotsDir, LIMITS.screenshotMaxBytes);
+  if (oversized) {
+    throw new Error(`screenshots/${oversized.path.slice(shotsDir.length + 1)}: ${oversized.bytes} bytes, over the ${LIMITS.screenshotMaxBytes} allowed (screenshots.max_bytes)`);
+  }
+}
+
 const out = process.env.MAKEFUN_OUTPUT_DIR ?? '/output';
 
 mkdirSync(out, { recursive: true });
-cpSync(join(here, 'app'), join(out, 'app'), { recursive: true });
+cpSync(appDir, join(out, 'app'), { recursive: true });
 mkdirSync(join(out, 'screenshots'), { recursive: true });
-if (existsSync(join(here, 'screenshots'))) cpSync(join(here, 'screenshots'), join(out, 'screenshots'), { recursive: true });
+if (existsSync(shotsDir)) cpSync(shotsDir, join(out, 'screenshots'), { recursive: true });
 
-// The scorer's own caps (reference/gate.json): only text_max_bytes shapes the bytes; the others refuse an entry the
-// scorer would refuse (more than 3 screenshots or one over 256 KiB; more than 993 files and directories in app/ or
-// 16 MiB of app files: app/ counts beside /output's own 1000-entry cap, its screenshots/ and dossier.json).
-writeFileSync(
-  join(out, 'dossier.json'),
-  buildDossier(out, { text_max_bytes: 163840, screenshots: { max: 3, max_bytes: 262144 }, app_max_files: 993, app_max_bytes: 16777216 }),
-);
+const dossier = buildDossier(out, {
+  text_max_bytes: LIMITS.textMaxBytes,
+  screenshots: { max: LIMITS.screenshotMax, max_bytes: LIMITS.screenshotMaxBytes },
+  app_max_files: LIMITS.appMaxFiles,
+  app_max_bytes: LIMITS.appMaxBytes,
+});
+writeFileSync(join(out, 'dossier.json'), dossier);
+
+console.log(`wrote ${out}/dossier.json: app ${appTotals.files} entries / ${appTotals.bytes} bytes, dossier ${dossier.length} bytes`);
