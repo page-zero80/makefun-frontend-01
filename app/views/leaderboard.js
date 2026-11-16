@@ -31,25 +31,47 @@ function pageNumbers(current, total) {
   return output;
 }
 
-function phaseState(phase) {
+function phaseState(phase, now = Date.now()) {
   if (!phase?.key && !phase?.title) {
     return { key: 'pending', label: 'Pending', full: 'No standings published yet' };
   }
-  if (phase?.scores_visible === false) {
-    return { key: 'sealed', label: 'Sealed', full: 'Standings publish when the phase is finalized' };
-  }
-  if (phase?.finalized_at) return { key: 'resolved', label: 'Final', full: 'Finalized standings' };
-  const name = String(phase?.key || phase?.title || '').toLowerCase();
-  if (name.includes('develop')) {
+
+  const key = String(phase.key || '').toLowerCase();
+  const title = String(phase.title || '').toLowerCase();
+  const visible = phase.scores_visible !== false;
+  const finalized = Boolean(phase.finalized_at);
+
+  // The chip names the phase the reader is on, so it never contradicts the
+  // development/final toggle. Results replace the phase name once published.
+  if (key === 'dev' || key === 'development' || title.includes('develop')) {
     return { key: 'dev', label: 'Development', full: 'Development standings, judged as entries arrive' };
   }
-  if (name.includes('final')) {
-    return { key: 'final', label: 'Final', full: 'Final standings' };
+  if (key === 'final' || title.includes('final')) {
+    if (finalized) return { key: 'resolved', label: 'Results', full: 'Results published' };
+    return visible
+      ? { key: 'final', label: 'Final', full: 'Final standings, results still to publish' }
+      : { key: 'sealed', label: 'Final', full: 'Final standings publish when the phase is finalized' };
   }
-  if (name.includes('race') || name.includes('running') || name.includes('reveal')) {
-    return { key: 'live', label: 'Live', full: 'Standings update as entries are judged' };
+  if (finalized) return { key: 'resolved', label: 'Results', full: 'Results published' };
+
+  // LIVE belongs to a race or reveal that is actually running, not to the
+  // development phase whose scores merely update as entries arrive.
+  const name = `${key} ${title}`;
+  if (/race|running|reveal/.test(name)) {
+    const starts = Date.parse(phase.starts_at || '');
+    const ends = Date.parse(phase.ends_at || '');
+    const started = !Number.isFinite(starts) || now >= starts;
+    const running = !Number.isFinite(ends) || now < ends;
+    if (visible && started && running) {
+      return { key: 'live', label: 'Live', full: 'The race is running; standings update as entries are judged' };
+    }
+    return { key: 'pending', label: 'Pending', full: 'Waiting for the next phase' };
   }
-  return { key: 'live', label: 'Live', full: 'Standings update as entries are judged' };
+
+  if (!visible) {
+    return { key: 'sealed', label: 'Sealed', full: 'Standings publish when the phase is finalized' };
+  }
+  return { key: 'pending', label: 'Pending', full: 'Standings are being prepared' };
 }
 
 function recordLine(row) {
@@ -265,7 +287,7 @@ export function createLeaderboardView(data, route) {
       replace(phaseSwitch);
       return;
     }
-    const currentLabel = phaseParam ? 'Current' : phase.title || 'Current';
+    const currentLabel = phaseParam ? 'Development' : phase.title || 'Development';
     replace(
       phaseSwitch,
       el(
@@ -295,7 +317,10 @@ export function createLeaderboardView(data, route) {
     const rows = pageRows(pageState.page);
 
     setText(factEntries, num(total));
-    setText(factPage, total ? (state.key === 'live' ? 'Live' : state.key === 'resolved' ? 'Final' : 'Sealed') : 'None yet');
+    const standingsFact =
+      { dev: 'Live', live: 'Live', final: 'Final', sealed: 'Sealed', resolved: 'Results' }[state.key] ||
+      'Pending';
+    setText(factPage, total ? standingsFact : 'None yet');
     setText(titleEl, bountyTitle);
     replace(statusSlot, statusChip(state));
     note.textContent =

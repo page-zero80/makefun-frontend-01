@@ -96,16 +96,25 @@ export function avatar(profile, attrs = {}) {
     typeof profile?.image === 'string' ? profile.image : null,
   ].filter(Boolean);
 
-  for (const candidate of candidates) {
-    const img = apiImage(candidate, {
-      alt: '',
-      onerror: () => img.remove(),
-    });
-    if (img) {
-      wrap.append(img);
-      break;
+  // Try each candidate in turn: the small avatar may 404 while the full one
+  // loads, and either may fail without leaving the profile without its image.
+  let index = 0;
+  const tryNext = () => {
+    while (index < candidates.length) {
+      const img = apiImage(candidates[index++], {
+        alt: '',
+        onerror: () => {
+          img.remove();
+          tryNext();
+        },
+      });
+      if (img) {
+        wrap.append(img);
+        return;
+      }
     }
-  }
+  };
+  tryNext();
   return wrap;
 }
 

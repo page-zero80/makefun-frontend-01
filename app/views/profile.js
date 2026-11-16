@@ -42,7 +42,8 @@ function placeLabel(solution) {
 function scoreLabel(solution) {
   const score = solution.score;
   if (!score?.column?.key) return '';
-  return `${score.column.title}: ${formatColumn(score.column.key, score.value, { display: score.display })}`;
+  const title = score.column.title || score.column.key;
+  return `${title}: ${formatColumn(score.column.key, score.value, { display: score.display })}`;
 }
 
 function solutionRow(solution) {
@@ -124,6 +125,10 @@ function linkRows(profile) {
 
 export function createProfileView(profile, route) {
   const handle = profile.handle || route.handle;
+  const displayName = String(profile.display_name || '').trim();
+  const handleOnly = !displayName || displayName.replace(/^@/, '') === handle;
+  const nameText = handleOnly ? `@${handle}` : displayName;
+  const showHandleLine = !handleOnly;
   const record = profile.record || {};
   const solutions = Array.isArray(profile.solutions) ? profile.solutions : [];
   const payouts = Array.isArray(profile.payouts) ? profile.payouts : [];
@@ -167,8 +172,8 @@ export function createProfileView(profile, route) {
             profile.demo ? el('span', { class: 'chip chip--draft' }, 'Demo') : null,
             el('span', { class: 'kicker-muted' }, `joined ${dateOnly(profile.joined_at)}`),
           ),
-          el('h1', { class: 'profile-name' }, profile.display_name || `@${handle}`),
-          el('p', { class: 'profile-handle' }, `@${handle}`),
+          el('h1', { class: 'profile-name' }, nameText),
+          showHandleLine ? el('p', { class: 'profile-handle' }, `@${handle}`) : null,
           profile.bio ? el('p', { class: 'profile-bio' }, profile.bio) : null,
         ),
       ),
