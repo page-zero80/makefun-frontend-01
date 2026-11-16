@@ -2,21 +2,41 @@
 // dates, and all twenty prize places. The detail read leaves out the entry
 // list (submissions=summary), so this page stays one small request.
 
+import { getBounties, getBoardBounty, getBounty } from '../api.js';
 import {
   bountyState,
-  dateFull,
-  dateOnly,
   deadlineShort,
   deckLine,
-  markdown,
+  el,
+  emptyPanel,
+  leaderboardHash,
   money,
   num,
-  ordinal,
   plural,
+  profileHash,
   timeLeftLabel,
-} from '../format.js';
-import { leaderboardHash, profileHash } from '../router.js';
-import { el, emptyPanel, statusChip } from '../ui.js';
+} from '../core.js';
+import { dateFull, dateOnly, markdown, ordinal, statusChip } from './format.js';
+
+export async function load(route) {
+  // Coming from the board, the row already has the full brief, prize table
+  // and dates, so paint it from memory; the detail answer enriches it after.
+  const preview = getBoardBounty(route.slug);
+  if (preview) return preview;
+  try {
+    return await getBounty(route.slug, { attempts: 1 });
+  } catch (error) {
+    if (error?.status !== 404 && error?.status !== 503) throw error;
+    const board = await getBounties().catch(() => null);
+    const item = board?.items?.find((bounty) => bounty.slug === route.slug);
+    if (item) return { ...item, __fromBoard: true };
+    throw error;
+  }
+}
+
+export function title(bounty, route) {
+  return `${bounty?.title || route.slug} · make.fun`;
+}
 
 function resultsDueOf(bounty) {
   if (bounty.resolvedAt) return bounty.resolvedAt;
@@ -95,7 +115,7 @@ function judgingSection(bounty) {
   );
 }
 
-export function createBountyView(bounty) {
+export function create(bounty) {
   const now = Date.now();
   const state = bountyState(bounty, now);
   const pot = Number(bounty.potUsd ?? bounty.rewardAmount) || 0;

@@ -2,17 +2,53 @@
 // One profile read; the "show all entries" control patches the list without
 // asking the API again.
 
+import { getProfile } from '../api.js';
 import {
+  apiImage,
+  bountyHash,
   bountyState,
-  dateOnly,
-  formatColumn,
+  el,
+  emptyPanel,
+  leaderboardHash,
   money,
   num,
-  ordinal,
   plural,
-} from '../format.js';
-import { bountyHash, leaderboardHash } from '../router.js';
-import { avatar, el, emptyPanel, replace, statusChip } from '../ui.js';
+  replace,
+} from '../core.js';
+import { dateOnly, formatColumn, initials, ordinal, statusChip } from './format.js';
+
+export async function load(route) {
+  return getProfile(route.handle);
+}
+
+export function title(profile, route) {
+  return `@${profile?.handle || route.handle} · make.fun`;
+}
+
+/** A square avatar with a serif monogram underneath if no image loads. */
+function avatar(profile, attrs = {}) {
+  const wrap = el('span', { class: `avatar${attrs.class ? ` ${attrs.class}` : ''}` });
+  wrap.append(el('span', { class: 'avatar-mono', 'aria-hidden': 'true' }, initials(profile)));
+  const candidates = [profile?.avatar?.url_small, profile?.avatar?.url, typeof profile?.image === 'string' ? profile.image : null].filter(Boolean);
+  let index = 0;
+  const tryNext = () => {
+    while (index < candidates.length) {
+      const img = apiImage(candidates[index++], {
+        alt: '',
+        fail: () => {
+          img.remove();
+          tryNext();
+        },
+      });
+      if (img) {
+        wrap.append(img);
+        return;
+      }
+    }
+  };
+  tryNext();
+  return wrap;
+}
 
 function recordValue(record, key) {
   const value = record?.[key];
@@ -123,7 +159,7 @@ function linkRows(profile) {
   );
 }
 
-export function createProfileView(profile, route) {
+export function create(profile, route) {
   const handle = profile.handle || route.handle;
   const displayName = String(profile.display_name || '').trim();
   const handleOnly = !displayName || displayName.replace(/^@/, '') === handle;

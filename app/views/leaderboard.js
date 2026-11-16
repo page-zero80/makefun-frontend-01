@@ -2,19 +2,50 @@
 // whole and every later row as a light stub, so the table can page through a
 // 10,000-row board without another request or a huge DOM.
 
+import { getBounty, getLeaderboard } from '../api.js';
 import {
+  bountyHash,
+  el,
+  emptyPanel,
+  leaderboardHash,
+  num,
+  profileHash,
+  replace,
+  replaceHash,
+  setText,
+} from '../core.js';
+import {
+  columnTitle,
   dateFull,
   intervalValue,
-  num,
   ordinal,
   rankValue,
   secondaryColumn,
   secondaryValue,
   shortColumnTitle,
-  columnTitle,
-} from '../format.js';
-import { bountyHash, leaderboardHash, profileHash, replaceHash } from '../router.js';
-import { el, emptyPanel, replace, setText, statusChip } from '../ui.js';
+  statusChip,
+} from './format.js';
+
+export async function load(route) {
+  const phase = route.params.get('phase') === 'final' ? 'final' : '';
+  try {
+    return await getLeaderboard(route.slug, { phase });
+  } catch (error) {
+    // A bounty with no judged entries can 404 its leaderboard. That is an
+    // empty state, not a missing bounty: load the bounty for its title and
+    // render the page with no rows.
+    if (error?.status !== 404) throw error;
+    try {
+      return { competition: await getBounty(route.slug), phase: {}, entries: [], rest: [] };
+    } catch {
+      throw error;
+    }
+  }
+}
+
+export function title(data, route) {
+  return `Leaderboard · ${data?.competition?.title || route.slug} · make.fun`;
+}
 
 const PAGE_SIZE = 10;
 
@@ -84,7 +115,7 @@ function recordLine(row) {
   return `${wins}W · ${losses}L`;
 }
 
-export function createLeaderboardView(data, route) {
+export function create(data, route) {
   const entries = Array.isArray(data?.entries) ? data.entries : [];
   const rest = Array.isArray(data?.rest) ? data.rest : [];
   const total = entries.length + rest.length;
@@ -280,8 +311,7 @@ export function createLeaderboardView(data, route) {
     );
   }
 
-  function paintPhaseSwitch() {
-    const show = Boolean(phaseParam) || (phase.key && phase.key !== 'final');
+  function paintPhaseSwitch() {    const show = Boolean(phaseParam) || (phase.key && phase.key !== 'final');
     phaseSwitch.hidden = !show;
     if (!show) {
       replace(phaseSwitch);
@@ -310,6 +340,15 @@ export function createLeaderboardView(data, route) {
       ),
     );
   }
+
+  pager.addEventListener('click', (event) => {
+    const button = event.target.closest('button[data-page]');
+    const page = Number(button?.dataset.page);
+    if (!button || button.disabled || page === pageState.page) return;
+    pageState.page = page;
+    paint();
+    replaceHash(leaderboardHash(slug, pageState.page, phaseParam));
+  });
 
   function paint() {
     const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
@@ -350,15 +389,10 @@ export function createLeaderboardView(data, route) {
         {
           class: `page-btn${attrs.current ? ' is-current' : ''}`,
           type: 'button',
+          'data-page': page,
           'aria-label': attrs.label || `Page ${page}`,
           'aria-current': attrs.current ? 'page' : null,
           disabled: attrs.disabled || null,
-          onclick: () => {
-            if (attrs.disabled || pageState.page === page) return;
-            pageState.page = page;
-            paint();
-            replaceHash(leaderboardHash(slug, pageState.page, phaseParam));
-          },
         },
         text,
       );

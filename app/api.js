@@ -1,31 +1,17 @@
 // make.fun's public API, read-only and same for every caller.
 //
-// Every answer is kept in memory for a minute. After that it is revalidated
-// with If-None-Match: a 304 means the bytes did not change, so the cached
-// object is reused and the request costs no download. Identical requests in
-// flight share one promise. A 503 that names a Retry-After is retried a few
-// times, because make.fun rebuilds its board pages lazily.
+// Answers stay in memory for a minute, then revalidate with If-None-Match: a
 
 const ORIGIN = 'https://make.fun';
 const TTL_MS = 60_000;
 const MAX_ENTRIES = 20;
 const listeners = new Set();
-
 const memory = new Map();
 let boardItems = null;
 
-export const stats = {
-  requests: 0,
-  network: 0,
-  revalidated: 0,
-  notModified: 0,
-  memoryHits: 0,
-  stale: 0,
-  errors: 0,
-  lastUpdated: null,
-};
+const stats = { requests: 0, network: 0, revalidated: 0, notModified: 0, memoryHits: 0, stale: 0, errors: 0, lastUpdated: null };
 
-export class ApiError extends Error {
+class ApiError extends Error {
   constructor(message, { status = 0, code = '', retryAfter = 0 } = {}) {
     super(message);
     this.name = 'ApiError';
@@ -37,27 +23,13 @@ export class ApiError extends Error {
 
 export function subscribeCache(listener) {
   listeners.add(listener);
-  listener(snapshot());
+  listener({ lastUpdated: stats.lastUpdated });
   return () => listeners.delete(listener);
 }
 
-export function snapshot() {
-  return {
-    ...stats,
-    size: memory.size,
-    entries: [...memory.entries()].map(([path, entry]) => ({
-      path,
-      bytes: entry.bytes ?? null,
-      etag: entry.etag ?? null,
-      age: entry.at ? Math.max(0, Math.round((Date.now() - entry.at) / 1000)) : null,
-    })),
-  };
-}
-
 function emit() {
-  const value = snapshot();
   for (const listener of listeners) {
-    try { listener(value); } catch { /* a footer update never breaks a view */ }
+    try { listener({ lastUpdated: stats.lastUpdated }); } catch { /* never break a view */ }
   }
 }
 
@@ -74,7 +46,7 @@ function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function parseErrorBody(body) {
+function errorBody(body) {
   if (!body || typeof body !== 'object') return null;
   return {
     message: body.detail || body.title || (Array.isArray(body.error) ? body.error[0]?.message : '') || '',
@@ -93,10 +65,6 @@ async function request(path, { ifNoneMatch, attempts = 5 } = {}) {
     try {
       response = await fetch(ORIGIN + path, { method: 'GET', headers, credentials: 'omit', mode: 'cors' });
     } catch {
-      // make.fun's 304 responses omit Access-Control-Allow-Origin, so a
-      // conditional cross-origin GET that comes back 304 is rejected by the
-      // browser before we can read it. Send the validator as the rules ask,
-      // then fall back to an unconditional GET so the page still refreshes.
       if (conditional) {
         conditional = false;
         try {
@@ -109,27 +77,16 @@ async function request(path, { ifNoneMatch, attempts = 5 } = {}) {
       }
     }
 
-    // make.fun builds board pages lazily and answers 503 while it does. Honour
-    // Retry-After when it is set, otherwise back off 1s, 2s, 3s, 5s.
     if (response.status === 503 && attempt < attempts) {
       const retryAfter = Number(response.headers.get('Retry-After'));
-      const waitMs =
-        Number.isFinite(retryAfter) && retryAfter > 0
-          ? Math.min(8, retryAfter) * 1000
-          : Math.min(5, attempt + 1) * 1000;
-      await wait(waitMs);
+      await wait(Number.isFinite(retryAfter) && retryAfter > 0 ? Math.min(8, retryAfter) * 1000 : Math.min(5, attempt + 1) * 1000);
       continue;
     }
     return response;
   }
 }
 
-/**
- * GET a path under https://make.fun/api.
- * @param {string} path
- * @param {{force?: boolean}} options force a revalidation even inside the TTL.
- */
-export async function apiGet(path, { force = false, attempts = 5 } = {}) {
+async function apiGet(path, { force = false, attempts = 5 } = {}) {
   const cached = memory.get(path);
   const fresh = cached?.data !== undefined && Date.now() - cached.at < TTL_MS;
 
@@ -140,8 +97,6 @@ export async function apiGet(path, { force = false, attempts = 5 } = {}) {
   }
   if (cached?.inflight) return cached.inflight;
 
-  // One mutable entry per path, so a 304 or a stale-on-error answer updates the
-  // same object the next caller reads (including clearing inflight).
   const entry = { ...(cached || {}) };
   const promise = (async () => {
     stats.requests++;
@@ -160,8 +115,6 @@ export async function apiGet(path, { force = false, attempts = 5 } = {}) {
     }
 
     if (!response.ok) {
-      // A 5xx while revalidating should not blank a page that already has an
-      // answer. Keep the old bytes on screen and try again on the next visit.
       if (entry.data !== undefined && response.status >= 500) {
         entry.at = Date.now() - TTL_MS;
         entry.inflight = null;
@@ -170,7 +123,7 @@ export async function apiGet(path, { force = false, attempts = 5 } = {}) {
         return entry.data;
       }
       let parsed = null;
-      try { parsed = parseErrorBody(await response.json()); } catch { /* non-JSON error */ }
+      try { parsed = errorBody(await response.json()); } catch { /* non-JSON error */ }
       stats.errors++;
       emit();
       throw new ApiError(parsed?.message || `make.fun answered ${response.status}.`, {
@@ -193,7 +146,6 @@ export async function apiGet(path, { force = false, attempts = 5 } = {}) {
     entry.etag = response.headers.get('etag') || null;
     entry.at = Date.now();
     entry.inflight = null;
-    entry.bytes = Number(response.headers.get('content-length')) || null;
     trimMemory();
     stats.network++;
     stats.lastUpdated = new Date().toISOString();
@@ -236,11 +188,7 @@ export function getBounties(options) {
   });
 }
 
-/**
- * A bounty already present in the board answer, if one has been read. Board
- * rows carry the full description, the live pot, the 20-place table, the
- * winner and the dates, so clicking a bounty paints from memory instantly.
- */
+/** A bounty already present in the board answer, if one has been read. */
 export function getBoardBounty(slug) {
   return boardItems?.find((item) => item.slug === slug) || null;
 }
@@ -250,11 +198,7 @@ export function getBounty(slug, options) {
   return apiGet(`/api/competitions/${encodeURIComponent(slug)}?submissions=summary`, options);
 }
 
-/**
- * A bounty's standings. rows=first sends the first ten rows whole and the rest
- * as light stubs, so a page paints without parsing every row of a 10,000-row
- * board.
- */
+/** A bounty's standings: ten whole rows, then light stubs. */
 export function getLeaderboard(slug, { phase = '' } = {}) {
   const query = ['rows=first'];
   if (phase) query.push(`phase=${encodeURIComponent(phase)}`);
