@@ -82,13 +82,15 @@ function rowMarkup(bounty, now) {
     state.key === 'resolved' && winner?.handle
       ? `<span class="r-winner">Won by <a href="${esc(profileHash(winner.handle))}" class="inline-link">@${esc(winner.handle)}</a>${winner.amountUsd ? ` · ${esc(money(winner.amountUsd))}` : ''}</span>`
       : '';
+  const entries = Number(bounty.submissionCount) || 0;
+  const meter = Math.min(100, Math.max(0, Math.round((entries / 6000) * 100)));
 
   return `<li class="bounty-row" data-slug="${esc(bounty.slug)}"><span class="row-content">
 <span class="r-reward"><span class="label">${state.key === 'resolved' ? 'Pot paid' : 'Live pot'}</span><span class="r-amount num">${esc(money(potOf(bounty)))}</span></span>
 <span class="r-ident"><span class="r-meta">${chipMarkup(state)}<span class="r-category">${esc(bounty.category || 'Other')}</span><span class="dot-sep" aria-hidden="true">·</span><span>${esc(bounty.sponsor?.name || 'Independent')}</span></span><a class="r-title" href="${esc(bountyHash(bounty.slug))}">${esc(title)}</a>${summary ? `<span class="r-summary">${esc(summary)}</span>` : ''}${won}</span>
 <span class="r-fee"><span class="label">Entry</span><span class="r-value">${fee == null ? 'Free' : esc(money(fee))}</span><span class="r-sub">${feeSub}</span></span>
 <span class="r-time"><span class="label">${state.key === 'live' ? 'Closes' : 'Deadline'}</span>${deadline}<span class="r-sub">${esc(deadlineShort(bounty.deadline))}</span></span>
-<span class="r-entries"><span class="label">Entries</span><span class="r-value num">${esc(num(bounty.submissionCount))}</span><a class="row-standings" href="${esc(leaderboardHash(bounty.slug))}" aria-label="Standings for ${esc(title)}">Standings<span aria-hidden="true"> →</span></a></span>
+<span class="r-entries"><span class="label">Entries</span><span class="r-value num">${esc(num(entries))}</span><span class="r-meter" aria-hidden="true"><i style="width:${meter}%"></i></span><a class="row-standings" href="${esc(leaderboardHash(bounty.slug))}" aria-label="Standings for ${esc(title)}">Standings<span aria-hidden="true"> →</span></a></span>
 </span></li>`;
 }
 
@@ -108,19 +110,20 @@ export const title = () => 'The bounty board · make.fun';
 
 export function create(data, route) {
   let items = Array.isArray(data?.items) ? data.items : [];
-  const state = readState(route.params);
+  const state = { ...readState(route.params), q: '' };
   const root = el('div', { class: 'board-page' });
   root.innerHTML = `<section class="board-hero">
 <p class="kicker">Public bounties · read-only</p><h1>The bounty board.</h1>
 <p class="board-deck">Every public call on make.fun: what it pays, what it asks, how long is left, and who has won.</p>
-<div class="hero-stats"><div class="stat"><span class="stat-number num" data-stat="live"></span><span class="stat-label">taking entries</span></div><div class="stat"><span class="stat-number num" data-stat="pot"></span><span class="stat-label">in live pots</span></div><div class="stat"><span class="stat-number num" data-stat="entries"></span><span class="stat-label">entries so far</span></div></div>
+<div class="hero-stats"><div class="stat stat--blue"><span class="stat-glyph" aria-hidden="true">◍</span><span class="stat-number num" data-stat="pot"></span><span class="stat-label">in live pots</span></div><div class="stat stat--sun"><span class="stat-glyph" aria-hidden="true">✦</span><span class="stat-number num" data-stat="live"></span><span class="stat-label">taking entries</span></div><div class="stat stat--warm"><span class="stat-glyph" aria-hidden="true">↗</span><span class="stat-number num" data-stat="entries"></span><span class="stat-label">entries so far</span></div></div>
 <p class="hero-meta" data-stat="meta"></p></section>
 <section class="board-toolbar" aria-label="Filter and sort the board">
 <div class="filters" role="group" aria-label="Bounty filters">${FILTERS.map(([key, label]) => `<button class="filter-btn" type="button" aria-pressed="false" data-view="${key}">${label}<span class="filter-count num"></span></button>`).join('')}</div>
-<div class="toolbar-right"><div class="sort-toggle" role="group" aria-label="Sort bounties"><span class="sort-label">Sort</span><button class="sort-btn" type="button" aria-pressed="false" data-sort="ending">Ending soonest</button><button class="sort-btn" type="button" aria-pressed="false" data-sort="pot">Pot size</button></div><button class="refresh-btn" type="button" title="Revalidate make.fun answers with If-None-Match">Refresh</button></div></section>
+<div class="toolbar-right"><label class="search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg><input type="search" placeholder="Search bounties" aria-label="Search bounties" data-search></label><div class="sort-toggle" role="group" aria-label="Sort bounties"><span class="sort-label">Sort</span><button class="sort-btn" type="button" aria-pressed="false" data-sort="ending">Ending soonest</button><button class="sort-btn" type="button" aria-pressed="false" data-sort="pot">Pot size</button></div><button class="refresh-btn" type="button" title="Revalidate make.fun answers with If-None-Match">Refresh</button></div></section>
 <p class="inline-error" role="status" hidden></p>
 <div class="board-layout"><section class="board-main" aria-label="Bounties"><p class="board-count"></p><ol class="bounty-list"></ol><div class="board-empty" hidden></div><nav class="pager" aria-label="Board pages"></nav></section>
-<aside class="board-aside" aria-label="Winners and data notes"><section class="aside-block"><h2 class="aside-title">Recent winners</h2><div class="winner-list"></div><p class="aside-note" data-winner-count></p></section>
+<aside class="board-aside" aria-label="Today's pick, winners and data notes"><section class="pick-card" hidden><p class="pick-tag">Today’s pick</p><img class="pick-mascot" src="img/mascot-cheer.png" width="190" height="174" loading="lazy" decoding="async" alt="make.fun mascot cheering"><h2 class="pick-title"></h2><p class="pick-line"></p><div class="pick-pot"><span class="pick-pot-value num"></span><img class="pick-coin" src="img/mascot-coin.png" width="44" height="44" loading="lazy" decoding="async" alt=""></div><div class="pick-meter" aria-hidden="true"><i></i></div><a class="pick-link" href="#/">Read the bounty →</a></section>
+<section class="aside-block"><h2 class="aside-title">Recent winners</h2><div class="winner-list"></div><p class="aside-note" data-winner-count></p></section>
 <section class="aside-block"><h2 class="aside-title">How this board works</h2><p class="aside-note">One read of make.fun’s public API serves the board. Answers stay in memory for a minute, then revalidate with an ETag; a 304 reuses the cached answer.</p><p class="aside-note">Pots are the reward plus entry fees paid. A bounty past its deadline is closed to entries even while its status still says open.</p></section></aside></div>`;
 
   const list = root.querySelector('.bounty-list');
@@ -134,6 +137,19 @@ export function create(data, route) {
   const stat = (key) => root.querySelector(`[data-stat="${key}"]`);
   const filters = [...root.querySelectorAll('.filter-btn')];
   const sorts = [...root.querySelectorAll('.sort-btn')];
+  const searchInput = root.querySelector('[data-search]');
+  const pickCard = root.querySelector('.pick-card');
+  const pickTitle = root.querySelector('.pick-title');
+  const pickLine = root.querySelector('.pick-line');
+  const pickPot = root.querySelector('.pick-pot-value');
+  const pickMeterBar = root.querySelector('.pick-meter i');
+  const pickLink = root.querySelector('.pick-link');
+
+  searchInput.addEventListener('input', () => {
+    state.q = searchInput.value.trim().toLowerCase();
+    state.page = 1;
+    paint();
+  });
 
   async function reload() {
     refresh.disabled = true;
@@ -190,6 +206,33 @@ export function create(data, route) {
       if (key === 'resolved') counts.resolved++;
     }
     for (const button of filters) button.querySelector('.filter-count').textContent = num(counts[button.dataset.view] || 0);
+    pickBlock();
+  }
+
+  function pickBlock() {
+    const now = Date.now();
+    const live = items.filter((bounty) => bountyState(bounty, now).key === 'live');
+    const pick = [...(live.length ? live : items)].sort(
+      (a, b) => (Number(b.submissionCount) || 0) - (Number(a.submissionCount) || 0),
+    )[0];
+    if (!pick) {
+      pickCard.hidden = true;
+      return;
+    }
+    const entries = Number(pick.submissionCount) || 0;
+    const pot = money(potOf(pick));
+    const when =
+      bountyState(pick, now).key === 'live'
+        ? timeLeftLabel(pick.deadline, now)
+        : bountyState(pick, now).key === 'resolved'
+          ? 'results published'
+          : 'entries closed';
+    pickCard.hidden = false;
+    pickTitle.textContent = pick.title || pick.slug;
+    pickLine.textContent = `${num(entries)} entries · ${pot} pot · ${when}`;
+    pickPot.textContent = pot;
+    pickMeterBar.style.width = `${Math.min(100, Math.round((entries / 6000) * 100))}%`;
+    pickLink.href = bountyHash(pick.slug);
   }
 
   function winnersBlock() {
@@ -205,7 +248,12 @@ export function create(data, route) {
 
   function paint() {
     const now = Date.now();
-    const sorted = sortRows(items.filter((bounty) => state.view === 'all' || bountyState(bounty, now).key === state.view), state.sort, now);
+    const filtered = items.filter((bounty) => {
+      if (state.view !== 'all' && bountyState(bounty, now).key !== state.view) return false;
+      if (!state.q) return true;
+      return [bounty.title, bounty.summary, bounty.category, bounty.sponsor?.name].join(' ').toLowerCase().includes(state.q);
+    });
+    const sorted = sortRows(filtered, state.sort, now);
     const pages = Math.max(1, Math.ceil(sorted.length / PAGE));
     state.page = Math.min(Math.max(1, state.page), pages);
     const start = (state.page - 1) * PAGE;
@@ -234,7 +282,7 @@ export function create(data, route) {
       );
     }
 
-    const viewLabel = state.view === 'all' ? 'published' : state.view;
+    const viewLabel = state.q ? 'matching' : state.view === 'all' ? 'published' : state.view;
     const first = sorted.length ? start + 1 : 0;
     countLine.textContent = sorted.length
       ? `Showing ${first}–${Math.min(start + PAGE, sorted.length)} of ${num(sorted.length)} ${viewLabel} ${sorted.length === 1 ? 'bounty' : 'bounties'} · ${state.sort === 'pot' ? 'largest pot first' : 'ending soonest first'}`

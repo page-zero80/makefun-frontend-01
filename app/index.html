@@ -12,28 +12,39 @@
 </head>
 <body data-loading="true">
 <div class="loadbar" aria-hidden="true"></div>
+<div class="app-shell">
+  <header class="masthead">
+    <div class="wrap masthead-inner">
+      <a class="wordmark" href="#/" aria-label="make.fun bounty board home">
+        <span class="wordmark-mark">make<span class="wordmark-dot">.</span>fun</span>
+        <span class="wordmark-sub">bounty board</span>
+      </a>
+      <nav class="nav" aria-label="Primary">
+        <a href="#/" data-nav="board">Board</a>
+        <a href="#/?view=resolved" data-nav="winners">Winners</a>
+      </nav>
+      <span class="live-pill"><span class="live-dot" aria-hidden="true"></span>Live data</span>
+    </div>
+  </header>
 
-<header class="masthead">
-  <div class="wrap masthead-inner">
-    <a class="wordmark" href="#/" aria-label="make.fun bounty board home">
-      <span class="wordmark-mark">make<span class="wordmark-dot">.</span>fun</span>
-      <span class="wordmark-sub">bounty board</span>
-    </a>
-    <nav class="nav" aria-label="Primary">
-      <a href="#/" data-nav="board">Board</a>
-      <a href="#/?view=resolved" data-nav="winners">Winners</a>
-    </nav>
-    <span class="live-pill"><span class="live-dot" aria-hidden="true"></span>Live data</span>
-  </div>
-</header>
+  <aside class="rail" aria-label="Sections">
+    <a class="rail-mark" href="#/" aria-label="make.fun bounty board home">m<span aria-hidden="true">.</span></a>
+    <a class="rail-link" href="#/" data-rail="board" aria-label="Bounty board" title="Bounty board"><span aria-hidden="true">▦</span></a>
+    <a class="rail-link" href="#/" data-rail="bounty" aria-label="Bounty" title="Bounty"><span aria-hidden="true">▲</span></a>
+    <a class="rail-link" href="#/" data-rail="leaderboard" aria-label="Leaderboard" title="Leaderboard"><span aria-hidden="true">◎</span></a>
+    <a class="rail-link" href="#/" data-rail="profile" aria-label="Profile" title="Profile"><span aria-hidden="true">✳</span></a>
+    <span class="rail-sp" aria-hidden="true"></span>
+    <a class="rail-link rail-help" href="#/" aria-label="Bounty board home" title="Bounty board home">?</a>
+  </aside>
 
-<main id="view" tabindex="-1"></main>
+  <main id="view" tabindex="-1"></main>
 
-<footer class="site-footer">
-  <div class="wrap footer-inner">
-    <p class="footer-note">A read-only view of make.fun's public bounties. No account, no writes.</p>
-    <p class="footer-cache"><span data-cache>Connecting to make.fun</span> <span class="footer-sep" aria-hidden="true">·</span> <span data-updated></span></p>
-  </div>
-</footer>
+  <footer class="site-footer">
+    <div class="wrap footer-inner">
+      <p class="footer-note">A read-only view of make.fun's public bounties. No account, no writes.</p>
+      <p class="footer-cache"><span data-cache>Connecting to make.fun</span> <span class="footer-sep" aria-hidden="true">·</span> <span data-updated></span></p>
+    </div>
+  </footer>
+</div>
 </body>
 </html>

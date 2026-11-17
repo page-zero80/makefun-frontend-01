@@ -4,12 +4,13 @@
 // literal import() and is cached after its first use.
 
 import { cacheSummary, getBoardBounty, getBounty, subscribeCache } from './api.js';
-import { el, emptyPanel, parseRoute, timeLeftLabel } from './core.js';
+import { bountyHash, el, emptyPanel, leaderboardHash, parseRoute, profileHash, timeLeftLabel } from './core.js';
 
 const viewRoot = document.getElementById('view');
 const cacheNode = document.querySelector('[data-cache]');
 const updatedNode = document.querySelector('[data-updated]');
 const navLinks = [...document.querySelectorAll('[data-nav]')];
+const railLinks = [...document.querySelectorAll('[data-rail]')];
 const LOADING = {
   board: ['The bounty board', 'Reading make.fun’s public bounties…'],
   bounty: ['Bounty', 'Reading this bounty from make.fun…'],
@@ -50,6 +51,19 @@ function setNav(route) {
   for (const link of navLinks) {
     const current = link.dataset.nav === 'winners' ? winners : !winners && link.dataset.nav === 'board';
     if (current) link.setAttribute('aria-current', 'page');
+    else link.removeAttribute('aria-current');
+  }
+  const slug = route.slug;
+  const hrefs = {
+    board: '#/',
+    bounty: slug ? bountyHash(slug) : '#/',
+    leaderboard: slug ? leaderboardHash(slug) : '#/',
+    profile: route.handle ? profileHash(route.handle) : '#/',
+  };
+  for (const link of railLinks) {
+    const key = link.dataset.rail;
+    if (hrefs[key]) link.setAttribute('href', hrefs[key]);
+    if (key === route.kind) link.setAttribute('aria-current', 'page');
     else link.removeAttribute('aria-current');
   }
 }

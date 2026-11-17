@@ -417,7 +417,7 @@ export function create(data, route) {
 
   function emptyState() {
     if (state.key === 'pending') {
-      return emptyPanel({
+      const panel = emptyPanel({
         kicker: 'Nothing published',
         title: 'This bounty has no standings yet.',
         body: 'Standings appear here once entries have been judged and the first results publish. The bounty page still has its dates and prize table.',
@@ -426,6 +426,14 @@ export function create(data, route) {
           el('a', { class: 'text-link', href: '#/' }, 'The board →'),
         ],
       });
+      panel.append(
+        el(
+          'img',
+          { class: 'empty-mascot', src: 'img/mascot-sleep.png', width: '150', height: '132', loading: 'lazy', decoding: 'async', alt: 'make.fun mascot asleep' },
+        ),
+        el('p', { class: 'empty-caption' }, 'Nothing to rank yet — the standings will wake up after judging.'),
+      );
+      return panel;
     }
     if (state.key === 'sealed') {
       const due = phase.ends_at ? `Expected ${dateFull(phase.ends_at)}.` : '';

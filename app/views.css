@@ -225,3 +225,25 @@
 .profile-identity{padding-top:24px}
 .record-stat{padding-inline:12px}
 }
+
+/* Sky palette: recolour the surfaces that carry the old warm rules. */
+.bounty-title,.lb-title,.profile-name{font-weight:800;letter-spacing:-.03em}
+.section-title,.prose h2,.prose h3,.prose h4{font-weight:800;letter-spacing:-.02em}
+.podium-handle,.lb-handle,.winner-card-handle{font-weight:700}
+.prose code{background:var(--accent-soft);border-radius:5px;color:var(--accent-ink)}
+.prose pre{background:#F4F9FF;border-color:var(--rule);border-radius:14px}
+.prose blockquote{border-left-color:var(--accent);font-style:normal}
+.prose a{color:var(--accent)}
+.prose li::marker{color:var(--accent)}
+.lb-row:hover{background:#F7FAFF}
+.phase-option[aria-current="page"]{background:var(--ink);color:#fff}
+.phase-switch{overflow:hidden;border-color:var(--rule);border-radius:999px}
+.phase-option+.phase-option{border-left-color:var(--rule)}
+.micro-tag{padding:3px 7px;border:0;border-radius:999px;background:#F2F6FC;color:var(--muted)}
+.prize-fee{color:var(--accent-ink)}
+.winner-card{border-top-color:var(--accent)}
+.factstrip,.record-strip,.podium,.section-heading,.rules-details,.bounty-foot,.profile-identity,.prize-table th,.lb-table th,.md-table th{border-color:var(--rule)}
+.prize-table th,.lb-table th{color:var(--muted)}
+.lb-row--top .lb-rank,.podium-card--first .podium-rank{color:var(--accent)}
+.empty-mascot{display:block;width:150px;height:auto;margin:4px 0 10px}
+.empty-caption{margin:0 0 18px;font-size:12px;line-height:1.5;color:var(--muted)}
